@@ -1,52 +1,43 @@
-import time
-import threading
+import os
 import requests
-import sys
-
 from flask import Flask, render_template
 from flask_socketio import SocketIO
-import os
-from dotenv import load_dotenv
-
 from smartcard.System import readers
 from smartcard.util import toHexString
 from smartcard.Exceptions import NoCardException
+from gpiozero import LED # Modern RPi GPIO library
+from time import sleep
 
-# Load configuration from .env file
-load_dotenv()
+# --- Configuration ---
+ODOO_WEBHOOK_URL = "YOUR_ODOO_WEBHOOK_URL"
+GREEN_LED_PIN = 26
+RED_LED_PIN = 19
 
-# Configuration from Environment Variables
-ODOO_WEBHOOK_URL = os.getenv("ODOO_WEBHOOK_URL")
-APP_SECRET_KEY = os.getenv("APP_SECRET_KEY", "default_secret_for_dev")
-
-# Initialize Flask with the secret
-app = Flask(__name__)
-app.config['SECRET_KEY'] = APP_SECRET_KEY
-
-
-# Get the directory where app.py is located
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
+# Initialize Hardware LEDs
+green_led = LED(GREEN_LED_PIN)
+red_led = LED(RED_LED_PIN)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'odoo_nfc_kiosk_2026'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', logger=True, engineio_logger=True)
-
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 def init_hardware():
-  # USB readers are Plug-and-Play. We just check if it's plugged in.
     available_readers = readers()
     if not available_readers:
         print("❌ No USB NFC Reader found!")
+        # Blink red rapidly to show error
+        red_led.blink(on_time=0.1, off_time=0.1, n=5)
         return False
     print(f"✅ Found USB Reader: {available_readers[0]}")
     return True
-    
 
 def trigger_odoo(card_id):
+    # Stop Green blink, Start Red blink to show "Processing"
+    green_led.off()
+    red_led.blink(on_time=0.2, off_time=0.2)
+    
     try:
         payload = {"card_id": card_id}
-        # We send the request and wait for Odoo's response
         r = requests.post(ODOO_WEBHOOK_URL, json=payload, timeout=5)
         return r.status_code == 200
     except Exception as e:
@@ -55,45 +46,59 @@ def trigger_odoo(card_id):
 
 def nfc_worker():
     print("🚀 USB NFC listener started...")
+    
     while True:
+        # State: Waiting for Card (Green Blinking)
+        if not green_led.is_lit:
+            green_led.blink(on_time=1, off_time=1)
+        
         socketio.sleep(0.5)
         try:
-           r = readers()
+            r = readers()
             if not r: continue
             
             connection = r[0].createConnection()
             connection.connect()
             
-            # Command to get the Card UID (Standard ACR122U/1252U APDU command)
             GET_UID = [0xFF, 0xCA, 0x00, 0x00, 0x00]
             data, sw1, sw2 = connection.transmit(GET_UID)
             
-            if sw1 == 0x90: # Success code
+            if sw1 == 0x90:
                 card_id = toHexString(data).replace(" ", "")
                 print(f"🔍 USB Card Scanned: {card_id}")
                 
+                # Communicate with Odoo
                 success = trigger_odoo(card_id)
-                socketio.emit('scan_result', {
-                    'status': 'success' if success else 'error',
-                    'card_id': card_id
-                })
-                socketio.sleep(3) # Cooldown to prevent double-scans
-        except NoCardException:
-            continue # No card on the reader, keep looking
-        except Exception as e:
-            # Most common error is the reader being unplugged or "Card Not Found"
-            pass
+                
+                # Handle Response Logic
+                red_led.off() # Stop the "Processing" blink
+                
+                if success:
+                    green_led.on() # Steady Green
+                    red_led.off()
+                else:
+                    green_led.off()
+                    red_led.on()  # Steady Red
+                
+                # Show result for 3 seconds
+                socketio.sleep(3)
+                
+                # Reset for next scan
+                green_led.off()
+                red_led.off()
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+        except NoCardException:
+            continue 
+        except Exception as e:
+            pass
 
 if __name__ == '__main__':
     try:
         if init_hardware():
-            # Start background thread
-            socketio.start_background_task(nfc_worker)
+            socketio.start_background_task(target=nfc_worker)
+            # Port 5000 remains open if you still want to check the logs via browser
             socketio.run(app, host='0.0.0.0', port=5000, debug=False, allow_unsafe_werkzeug=True)
     except KeyboardInterrupt:
+        green_led.off()
+        red_led.off()
         print("\nStopping...")
-    
