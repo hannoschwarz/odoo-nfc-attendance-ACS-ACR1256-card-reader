@@ -14,7 +14,7 @@ sudo apt update
 sudo apt install -y python3-pip python3-venv git unclutter chromium \
      netcat-openbsd swig python3-dev liblgpio-dev build-essential p7zip-full \
      wget libpcsclite-dev  gcc libccid pcscd pcsc-tools
-sudo apt install python3-rpi.gpio python3-gpiozero -y     
+#sudo apt install python3-rpi.gpio python3-gpiozero -y     
 
 # --- 0. FIX LOCALES (Hard Reset) ---
 echo "🌐 Fixing Locales..."
@@ -39,6 +39,7 @@ mkdir -p /home/$USER/attendance
 cd "$PROJECT_DIR"
 python3 -m venv env
 source env/bin/activate
+pip install rpi.gpio gpiozero
 pip install flask flask-socketio requests eventlet python-dotenv pyscard
 deactivate
 
