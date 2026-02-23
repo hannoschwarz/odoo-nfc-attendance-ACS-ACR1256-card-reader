@@ -35,6 +35,7 @@ sudo dpkg -i libacsccid1_1.1.12-1~bpo12+1_arm64.deb
 
 # --- 5. PYTHON VIRTUAL ENVIRONMENT ---
 echo "🐍 Setting up Python Environment..."
+mkdir -p /home/$USER/attendance
 cd "$PROJECT_DIR"
 python3 -m venv env
 source env/bin/activate
