@@ -81,7 +81,7 @@ sudo systemctl enable attendance_app.service
 echo "-------------------------------------------------------"
 echo "✅ INSTALLATION COMPLETE!"
 echo "-------------------------------------------------------"
-echo "1. Put your app.py and templates/index.html in: $PROJECT_DIR"
+echo "1. Put your app.py in: $PROJECT_DIR"
 echo "2. Edit your Odoo URL in: $PROJECT_DIR/.env"
 echo "3. Run: sudo systemctl restart attendance_app.service"
 echo "-------------------------------------------------------"
