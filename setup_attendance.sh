@@ -105,24 +105,6 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF"
 
-# Kiosk Service
-sudo bash -c "cat <<EOF > /etc/systemd/system/attendance_kiosk.service
-[Unit]
-Description=Odoo NFC Kiosk Browser
-After=attendance_app.service
-
-[Service]
-User=$USER
-Environment=DISPLAY=:0
-Environment=XAUTHORITY=/home/$USER/.Xauthority
-ExecStartPre=/bin/bash -c \"sed -i 's/\\\"exited_cleanly\\\":false/\\\"exited_cleanly\\\":true/' /home/$USER/.config/chromium/Default/Preferences || true\"
-ExecStart=/usr/bin/chromium-browser --noerrdialogs --disable-infobars --kiosk --no-first-run http://localhost:5000
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=graphical.target
-EOF"
 
 sudo systemctl daemon-reload
 sudo systemctl enable attendance_app.service 
