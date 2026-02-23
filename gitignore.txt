@@ -1,0 +1,10 @@
+# Private credentials
+.env
+
+# Python
+env/
+__pycache__/
+*.pyc
+
+# OS files
+.DS_Store

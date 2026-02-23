@@ -1,0 +1,136 @@
+#!/bin/bash
+
+# Exit immediately if a command exits with a non-zero status.
+set -e
+
+# Use absolute path for reliability
+PROJECT_DIR="/home/$USER/attendance"
+
+echo "🚀 Starting Odoo NFC Kiosk Installation..."
+
+# --- 1. SYSTEM UPDATES & BUILD TOOLS ---
+echo "⚙️ Installing System Dependencies..."
+sudo apt update
+sudo apt install -y python3-pip python3-venv git unclutter chromium \
+     netcat-openbsd swig python3-dev liblgpio-dev build-essential p7zip-full \
+     wget libpcsclite-dev  gcc libccid pcscd pcsc-tools
+sudo apt install python3-rpi.gpio python3-gpiozero -y     
+
+# --- 0. FIX LOCALES (Hard Reset) ---
+echo "🌐 Fixing Locales..."
+sudo apt-get install -y locales
+sudo locale-gen en_GB.UTF-8
+# Set them for the current session to stop the Perl/Bash warnings
+export LANG=en_GB.UTF-8
+export LANGUAGE=en_GB.UTF-8
+export LC_ALL=en_GB.UTF-8
+
+
+# --- 2. INSTALL WIRINGPI (DEBIAN BUILD) ---
+#echo "🏗️ Building WiringPi..."
+
+# Move to home and clear everything to start fresh
+#cd /home/$USER
+#sudo rm -rf WiringPi
+
+#echo "📥 Cloning fresh WiringPi..."
+#git clone https://github.com/WiringPi/WiringPi.git
+#cd /home/$USER/WiringPi
+
+#echo "🔨 Starting Build..."
+#sudo ./build debian
+
+#echo "🔍 Locating the .deb file..."
+# RECURSIVE SEARCH: This finds it even if it's inside 'debian-template'
+#DEB_FILE=$(find /home/$USER/WiringPi -name "wiringpi*.deb" | head -n 1)
+
+#if [ -n "$DEB_FILE" ]; then
+#    echo "📦 Found package at: $DEB_FILE"
+#    echo "🚀 Installing..."
+#    sudo apt install "$DEB_FILE" -y
+#else
+#    echo "❌ Error: Could not find the built .deb file inside /home/$USER/WiringPi."
+#    exit 1
+#fi
+
+# Return to repo
+cd /home/$USER/odoo-nfc-attendance-ACR1256
+
+# install the driver for the NFC reader
+sudo dpkg libasccid1_1.1.12-1~bpo12+1arm64.deb
+
+# --- 4. PROJECT STRUCTURE ---
+echo "📂 Organizing Project Folders..."
+mkdir -p "$PROJECT_DIR/templates"
+
+
+# --- 5. PYTHON VIRTUAL ENVIRONMENT ---
+echo "🐍 Setting up Python Environment..."
+cd "$PROJECT_DIR"
+python3 -m venv env
+source env/bin/activate
+pip install flask flask-socketio requests eventlet python-dotenv pyscard
+deactivate
+
+# --- 6. CONFIGURATION (DOTENV) ---
+echo "📄 Setting up Configuration template..."
+if [ ! -f .env ]; then
+    cat <<EOF > .env
+# Odoo Webhook URL
+ODOO_WEBHOOK_URL=https://your-odoo-domain.com/web/hook/xxxx
+
+# Flask Security
+APP_SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_hex(16))')
+EOF
+fi
+
+
+# --- 8. SYSTEMD SERVICES ---
+echo "🖥️ Configuring System Services..."
+
+# Backend Service
+sudo bash -c "cat <<EOF > /etc/systemd/system/attendance_app.service
+[Unit]
+Description=Odoo NFC Backend
+After=network.target
+
+[Service]
+User=$USER
+WorkingDirectory=$PROJECT_DIR
+ExecStart=$PROJECT_DIR/env/bin/python $PROJECT_DIR/app.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF"
+
+# Kiosk Service
+sudo bash -c "cat <<EOF > /etc/systemd/system/attendance_kiosk.service
+[Unit]
+Description=Odoo NFC Kiosk Browser
+After=attendance_app.service
+
+[Service]
+User=$USER
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/$USER/.Xauthority
+ExecStartPre=/bin/bash -c \"sed -i 's/\\\"exited_cleanly\\\":false/\\\"exited_cleanly\\\":true/' /home/$USER/.config/chromium/Default/Preferences || true\"
+ExecStart=/usr/bin/chromium-browser --noerrdialogs --disable-infobars --kiosk --no-first-run http://localhost:5000
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=graphical.target
+EOF"
+
+sudo systemctl daemon-reload
+sudo systemctl enable attendance_app.service 
+
+echo "-------------------------------------------------------"
+echo "✅ INSTALLATION COMPLETE!"
+echo "-------------------------------------------------------"
+echo "1. Put your app.py and templates/index.html in: $PROJECT_DIR"
+echo "2. Edit your Odoo URL in: $PROJECT_DIR/.env"
+echo "3. Run: sudo systemctl restart attendance_app.service"
+echo "-------------------------------------------------------"
