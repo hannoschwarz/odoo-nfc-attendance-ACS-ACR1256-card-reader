@@ -59,11 +59,6 @@ cd /home/$USER/odoo-nfc-attendance-ACS-ACR1256-card-reader
 # install the driver for the NFC reader
 sudo dpkg libasccid1_1.1.12-1~bpo12+1arm64.deb
 
-# --- 4. PROJECT STRUCTURE ---
-echo "📂 Organizing Project Folders..."
-mkdir -p "$PROJECT_DIR/templates"
-
-
 # --- 5. PYTHON VIRTUAL ENVIRONMENT ---
 echo "🐍 Setting up Python Environment..."
 cd "$PROJECT_DIR"
