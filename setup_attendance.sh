@@ -54,7 +54,7 @@ export LC_ALL=en_GB.UTF-8
 #fi
 
 # Return to repo
-cd /home/$USER/odoo-nfc-attendance-ACR1256
+cd /home/$USER/odoo-nfc-attendance-ACS-ACR1256-card-reader
 
 # install the driver for the NFC reader
 sudo dpkg libasccid1_1.1.12-1~bpo12+1arm64.deb
